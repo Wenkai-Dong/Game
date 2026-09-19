@@ -3,13 +3,10 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-import warnings
 from dataclasses import MISSING
-from typing import Literal
-
-from isaaclab.utils import configclass
 
 from isaaclab.terrains.sub_terrain_cfg import SubTerrainBaseCfg
+from isaaclab.utils import configclass
 
 """
 Different trimesh terrain configurations.

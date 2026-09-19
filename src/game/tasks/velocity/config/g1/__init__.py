@@ -29,7 +29,7 @@ gym.register(
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": f"{__name__}.rough_env_cfg:G1RoughEnvCfg",
+        "env_cfg_entry_point": f"{__name__}.velocity_env_cfg:VelocityEnvCfg",
         "default_agent": "rsl_rl",
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:PPORunnerCfg",
         "rsl_rl_distillation_cfg_entry_point": f"{agents.__name__}.rsl_rl_distillation_cfg:DistillationRunnerCfg",

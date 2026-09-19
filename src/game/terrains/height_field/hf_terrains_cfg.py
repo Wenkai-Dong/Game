@@ -3,12 +3,9 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-from dataclasses import MISSING
 
+from isaaclab.terrains import HfRandomUniformTerrainCfg
 from isaaclab.utils import configclass
-
-from isaaclab.terrains import HfRandomUniformTerrainCfg, SubTerrainBaseCfg
-
 
 """
 Different height field terrain configurations.

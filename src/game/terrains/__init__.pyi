@@ -13,8 +13,4 @@ __all__ = [
 from .height_field import (
     HfRandomUniformDifficultyTerrainCfg,
 )
-from .trimesh import (
-    MeshSteppingStonesTerrainCfg,
-    MeshPalletsNarrowTerrainCfg,
-    MeshPalletsTerrainCfg
-)
+from .trimesh import MeshPalletsNarrowTerrainCfg, MeshPalletsTerrainCfg, MeshSteppingStonesTerrainCfg

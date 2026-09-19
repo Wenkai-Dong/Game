@@ -9,8 +9,4 @@ __all__ = [
     "MeshPalletsTerrainCfg",
 ]
 
-from .mesh_terrains_cfg import (
-    MeshSteppingStonesTerrainCfg,
-    MeshPalletsNarrowTerrainCfg,
-    MeshPalletsTerrainCfg
-)
+from .mesh_terrains_cfg import MeshPalletsNarrowTerrainCfg, MeshPalletsTerrainCfg, MeshSteppingStonesTerrainCfg

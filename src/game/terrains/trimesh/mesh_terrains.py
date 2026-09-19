@@ -12,11 +12,10 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import scipy.spatial.transform as tf
-import torch
 import trimesh
 
+from isaaclab.terrains.trimesh.utils import make_border, make_box
 from isaaclab.terrains.utils import *  # noqa: F401, F403
-from isaaclab.terrains.trimesh.utils import make_border, make_plane, make_box
 
 if TYPE_CHECKING:
     from . import mesh_terrains_cfg
