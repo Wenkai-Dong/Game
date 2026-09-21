@@ -498,6 +498,8 @@ class VelocityEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.dt = 0.005
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
+        # ThrusterCfg is implemented in Isaac Lab and has no Newton-native execution path.
+        self.sim.use_newton_actuators = False
         # update sensor update periods
         # we tick all the sensors based on the smallest update period (physics update period)
         if self.scene.actor_height_scanner is not None:
