@@ -203,8 +203,6 @@ class ObservationsCfg:
         def __post_init__(self):
             self.enable_corruption = True
             self.concatenate_terms = True
-            self.history_length = 5
-            self.flatten_history_dim = False
 
     @configclass
     class ActorMapCfg(ObsGroup):
@@ -221,9 +219,16 @@ class ObservationsCfg:
             self.enable_corruption = False
             self.concatenate_terms = True
 
+    @configclass
+    class ActorHistoryCfg(ActorCfg):
+        def __post_init__(self):
+            self.history_length = 5
+            self.flatten_history_dim = False
+
     # observation groups
     actor: ActorCfg = ActorCfg()
     actor_map: ActorMapCfg = ActorMapCfg()
+    actor_history: ActorHistoryCfg = ActorHistoryCfg()
 
     @configclass
     class CriticCfg(ObsGroup):
