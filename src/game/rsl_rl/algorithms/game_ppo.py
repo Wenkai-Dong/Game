@@ -54,6 +54,9 @@ class GamePPO(PPO):
         # PPO parameters
         self.est_max_grad_norm = est_max_grad_norm
 
+        if self.symmetry is not None and not self.symmetry.use_mirror_loss:
+            self.symmetry.compute_loss = lambda *args, **kwargs: torch.zeros(())
+
     def update(self) -> dict[str, float]:
         loss_dict = super().update()
         if self.actor.ests:
