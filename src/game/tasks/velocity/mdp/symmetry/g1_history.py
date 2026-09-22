@@ -69,6 +69,9 @@ def compute_symmetric_states(
             obs_aug["critic_map"][:batch_size] = obs["critic_map"][:]
             # -- left-right
             obs_aug["critic_map"][batch_size: 2 * batch_size] = _transform_map_obs_left_right(obs["critic_map"])
+        if obs.get("actor_history") is not None:
+            obs_aug["actor_history"][:batch_size] = obs["actor_history"][:]
+            obs_aug["actor_history"][batch_size: 2 * batch_size] = _transform_actor_obs_left_right(obs["actor_history"])
     else:
         obs_aug = None
 

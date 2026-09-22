@@ -15,7 +15,7 @@ from isaaclab_physx.sim.schemas import PhysxArticulationCfg, PhysxRigidBodyCfg
 
 import isaaclab.sim as sim_utils
 from isaaclab.actuators import IdealPDActuatorCfg, ImplicitActuatorCfg, DelayedPDActuatorCfg
-from isaaclab.assets.articulation import ArticulationCfg
+from isaaclab.assets import ArticulationCfg, apply_articulation_ordering_preset
 from isaaclab.utils import configclass
 
 from game.assets.robots import unitree_actuators
@@ -558,6 +558,8 @@ UNITREE_G1_29DOF_DelayPD_CFG = UnitreeArticulationCfg(
                 "waist_yaw_joint": 5.0,
             },
             armature=0.01,
+            min_delay=0,
+            max_delay=4,
         ),
         "N7520_22_5": DelayedPDActuatorCfg(
             joint_names_expr=[".*_hip_roll_.*", ".*_knee_.*"],
@@ -572,6 +574,8 @@ UNITREE_G1_29DOF_DelayPD_CFG = UnitreeArticulationCfg(
                 ".*_knee_.*": 4.0,
             },
             armature=0.01,
+            min_delay=0,
+            max_delay=4,
         ),
         "N5020_16": DelayedPDActuatorCfg(
             joint_names_expr=[
@@ -593,6 +597,8 @@ UNITREE_G1_29DOF_DelayPD_CFG = UnitreeArticulationCfg(
                 "waist_.*_joint": 5.0,
             },
             armature=0.01,
+            min_delay=0,
+            max_delay=4,
         ),
         "W4010_25": DelayedPDActuatorCfg(
             joint_names_expr=[".*_wrist_pitch.*", ".*_wrist_yaw.*"],
@@ -601,6 +607,8 @@ UNITREE_G1_29DOF_DelayPD_CFG = UnitreeArticulationCfg(
             stiffness=40.0,
             damping=1.0,
             armature=0.01,
+            min_delay=0,
+            max_delay=4,
         ),
     },
     joint_sdk_names=[
@@ -635,6 +643,8 @@ UNITREE_G1_29DOF_DelayPD_CFG = UnitreeArticulationCfg(
         "right_wrist_yaw_joint",
     ],
 )
+
+UNITREE_G1_29DOF_DelayPD_Physx_CFG = apply_articulation_ordering_preset(UNITREE_G1_29DOF_DelayPD_CFG, "physx")
 
 
 ARMATURE_5020 = 0.003609725

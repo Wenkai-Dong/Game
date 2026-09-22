@@ -23,7 +23,7 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
     use_cache=False,
     sub_terrains={
         "random_rough": game_terrain_gen.HfRandomUniformDifficultyTerrainCfg(
-            proportion=0.1, noise_range=(-0.075, 0.075), noise_step=0.02, downsampled_scale=0.1, border_width=1.0
+            proportion=0.1, noise_range=(-0.05, 0.05), noise_step=0.02, downsampled_scale=0.1, border_width=1.0
         ),
         "pyramid_stairs": terrain_gen.MeshPyramidStairsTerrainCfg(
             proportion=0.1,

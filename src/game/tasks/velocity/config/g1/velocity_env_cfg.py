@@ -41,7 +41,7 @@ from game.tasks.velocity import mdp
 ##
 # Pre-defined configs
 ##
-from game.assets import UNITREE_G1_29DOF_DelayPD_CFG  # isort: skip
+from game.assets import UNITREE_G1_29DOF_DelayPD_Physx_CFG  # isort: skip
 from game.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
 
 
@@ -105,7 +105,7 @@ class MySceneCfg(InteractiveSceneCfg):
         debug_vis=False,
     )
     # robots
-    robot: ArticulationCfg = UNITREE_G1_29DOF_DelayPD_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+    robot: ArticulationCfg = UNITREE_G1_29DOF_DelayPD_Physx_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
     # sensors -- the concrete implementation is selected automatically from the active physics
     # backend (Newton / PhysX / OvPhysX); backend-specific fields such as ``global_world_only`` are
     # documented on the config and ignored by the backends that do not use them.
@@ -222,6 +222,7 @@ class ObservationsCfg:
     @configclass
     class ActorHistoryCfg(ActorCfg):
         def __post_init__(self):
+            super().__post_init__()
             self.history_length = 5
             self.flatten_history_dim = False
 

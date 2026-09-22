@@ -11,6 +11,7 @@ __all__ = [
     "UNITREE_G1_23DOF_CFG",
     "UNITREE_G1_29DOF_CFG",
     "UNITREE_G1_29DOF_DelayPD_CFG",
+    "UNITREE_G1_29DOF_DelayPD_Physx_CFG",
     "UNITREE_G1_29DOF_MIMIC_CFG",
 ]
 
@@ -22,5 +23,6 @@ from .robots import (
     UNITREE_G1_23DOF_CFG,
     UNITREE_G1_29DOF_CFG,
     UNITREE_G1_29DOF_DelayPD_CFG,
+    UNITREE_G1_29DOF_DelayPD_Physx_CFG,
     UNITREE_G1_29DOF_MIMIC_CFG,
 )
