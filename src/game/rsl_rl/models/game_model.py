@@ -198,8 +198,8 @@ class GameModel(MLPModel):
         latent_1d = super().get_latent(obs)
         # Estimate Velocity
         if "actor" in self.obs_set:
-            vel = self.est_vel(obs).detach()
-            latent_1d = torch.cat((vel, latent_1d), dim=-1)
+            latent_est = self.est_vel(obs).detach()
+            latent_1d = torch.cat((latent_est, latent_1d), dim=-1)
         # Process 2D observation groups with CNNs
         latent_cnn = torch.cat(
             [self.cnns[obs_group](obs[obs_group][:, -1:, ...]) for obs_group in self.obs_groups_2d], dim=-1
@@ -234,11 +234,11 @@ class GameModel(MLPModel):
 
     def as_jit(self) -> nn.Module:
         """Return a version of the model compatible with Torch JIT export."""
-        return _TorchCNNModel(self)
+        return _TorchGameModel(self)
 
     def as_onnx(self, verbose: bool = False) -> nn.Module:
         """Return a version of the model compatible with ONNX export."""
-        return _OnnxCNNModel(self, verbose)
+        return _OnnxGameModel(self, verbose)
 
     def _get_obs_dim(self, obs: TensorDict, obs_groups: dict[str, list[str]], obs_set: str) -> tuple[list[str], int]:
         """Select active observation groups and compute observation dimension."""
@@ -289,31 +289,65 @@ class GameModel(MLPModel):
         else:
             return self.obs_dim + self.cnn_latent_channels
 
-class _TorchCNNModel(nn.Module):
+class _TorchGameModel(nn.Module):
     """Exportable CNN model for JIT."""
 
-    def __init__(self, model: CNNModel) -> None:
+    def __init__(self, model: GameModel) -> None:
         """Create a TorchScript-friendly copy of a CNNModel."""
         super().__init__()
         self.obs_normalizer = copy.deepcopy(model.obs_normalizer)
         # Convert ModuleDict to ModuleList for ordered iteration
         self.cnns = nn.ModuleList([copy.deepcopy(model.cnns[g]) for g in model.obs_groups_2d])
+        self.dil_cnns = nn.ModuleList([copy.deepcopy(model.dil_cnns[g]) for g in model.obs_groups_2d])
+        self.positions = nn.ModuleList([copy.deepcopy(model.positions[g]) for g in model.obs_groups_2d])
+        self.ests = nn.ModuleList([copy.deepcopy(model.ests[g]) for g in model.obs_groups_his])
+        self.pool = copy.deepcopy(model.pool)
+        self.pool_linear = copy.deepcopy(model.pool_linear)
+        self.q_norm = copy.deepcopy(model.q_norm)
+        self.k_norm = copy.deepcopy(model.k_norm)
+        self.mha = copy.deepcopy(model.mha)
+        self.o_norm = copy.deepcopy(model.o_norm)
         self.mlp = copy.deepcopy(model.mlp)
         if model.distribution is not None:
             self.deterministic_output = model.distribution.as_deterministic_output_module()
         else:
             self.deterministic_output = nn.Identity()
 
-    def forward(self, obs_1d: torch.Tensor, obs_2d: list[torch.Tensor]) -> torch.Tensor:
+    def forward(self, obs_1d: torch.Tensor, obs_2d: list[torch.Tensor], obs_his: list[torch.Tensor]) -> torch.Tensor:
         """Run deterministic inference from separated 1D and 2D inputs."""
         latent_1d = self.obs_normalizer(obs_1d)
 
+        latent_est_list = []
+        for i, est in enumerate(self.ests):  # We assume obs_2d list matches the order of obs_groups_2d
+            latent_est_list.append(est(self.obs_normalizer(obs_his[i])))
+        latent_est = torch.cat(latent_est_list, dim=-1)
+        latent_1d = torch.cat((latent_est, latent_1d), dim=-1)
+
         latent_cnn_list = []
         for i, cnn in enumerate(self.cnns):  # We assume obs_2d list matches the order of obs_groups_2d
-            latent_cnn_list.append(cnn(obs_2d[i]))
+            latent_cnn_list.append(cnn(obs_2d[i][:, -1:, ...]))
+        latent_cnn = torch.cat(latent_cnn_list, dim=-1).flatten(2).permute(0, 2, 1)
 
-        latent_cnn = torch.cat(latent_cnn_list, dim=-1)
-        latent = torch.cat([latent_1d, latent_cnn], dim=-1)
+        latent_dil_cnn_list = []
+        for i, dil_cnn in enumerate(self.dil_cnns):  # We assume obs_2d list matches the order of obs_groups_2d
+            latent_dil_cnn_list.append(dil_cnn(obs_2d[i][:, -1:, ...]))
+        latent_dil_cnn = torch.cat(latent_dil_cnn_list, dim=-1).flatten(2).permute(0, 2, 1)
+
+        latent_pos_list = []
+        for i, position in enumerate(self.positions):  # We assume obs_2d list matches the order of obs_groups_2d
+            latent_pos_list.append(position(obs_2d[i].flatten(2).permute(0, 2, 1)))
+        latent_pos = torch.cat(latent_pos_list, dim=-1)
+        latent_mapping = torch.cat([latent_cnn, latent_dil_cnn, latent_pos], dim=-1)   # (N, 234, 64)
+
+        mapping_pool = self.pool(latent_mapping)    # (N, 234, 1)
+        mapping_pool = torch.sum(mapping_pool * latent_mapping, dim=1, keepdim=True)   # (N, 1, 64)
+        mapping_pool_enc = self.pool_linear(torch.concat([latent_1d.unsqueeze(1), mapping_pool], dim=-1))   # (N, 1, 64)
+        # gated_mha
+        query = self.q_norm(mapping_pool_enc)
+        key = self.k_norm(latent_mapping)
+        latent_mha, _ = self.mha(query, key, latent_mapping, need_weights=False)    # (N, 1, 64)
+        latent_mha = self.o_norm(latent_mha).flatten(1) # (N, 64)
+        latent = torch.cat([latent_1d, latent_mha], dim=-1)
 
         out = self.mlp(latent)
         return self.deterministic_output(out)
@@ -324,16 +358,25 @@ class _TorchCNNModel(nn.Module):
         pass
 
 
-class _OnnxCNNModel(nn.Module):
+class _OnnxGameModel(nn.Module):
     """Exportable CNN model for ONNX."""
 
-    def __init__(self, model: CNNModel, verbose: bool) -> None:
+    def __init__(self, model: GameModel, verbose: bool) -> None:
         """Create an ONNX-export wrapper around a CNNModel."""
         super().__init__()
         self.verbose = verbose
         self.obs_normalizer = copy.deepcopy(model.obs_normalizer)
         # Convert ModuleDict to ModuleList for ordered iteration
         self.cnns = nn.ModuleList([copy.deepcopy(model.cnns[g]) for g in model.obs_groups_2d])
+        self.dil_cnns = nn.ModuleList([copy.deepcopy(model.dil_cnns[g]) for g in model.obs_groups_2d])
+        self.positions = nn.ModuleList([copy.deepcopy(model.positions[g]) for g in model.obs_groups_2d])
+        self.ests = nn.ModuleList([copy.deepcopy(model.ests[g]) for g in model.obs_groups_his])
+        self.pool = copy.deepcopy(model.pool)
+        self.pool_linear = copy.deepcopy(model.pool_linear)
+        self.q_norm = copy.deepcopy(model.q_norm)
+        self.k_norm = copy.deepcopy(model.k_norm)
+        self.mha = copy.deepcopy(model.mha)
+        self.o_norm = copy.deepcopy(model.o_norm)
         self.mlp = copy.deepcopy(model.mlp)
         if model.distribution is not None:
             self.deterministic_output = model.distribution.as_deterministic_output_module()
@@ -344,17 +387,47 @@ class _OnnxCNNModel(nn.Module):
         self.obs_dims_2d = model.obs_dims_2d
         self.obs_channels_2d = model.obs_channels_2d
         self.obs_dim_1d = model.obs_dim
+        self.obs_groups_his = model.obs_groups_his
+        self.obs_dims_his = model.obs_dims_his
+        self.obs_channels_his = model.obs_channels_his
 
-    def forward(self, obs_1d: torch.Tensor, *obs_2d: torch.Tensor) -> torch.Tensor:
+    def forward(self, obs_1d: torch.Tensor, *obs_else: torch.Tensor) -> torch.Tensor:
         """Run deterministic inference for ONNX export."""
+        obs_2d = [x for x in obs_else if x.dim() == 4]
+        obs_his = [x for x in obs_else if x.dim() == 3]
         latent_1d = self.obs_normalizer(obs_1d)
 
-        latent_cnn_list = []
-        for i, cnn in enumerate(self.cnns):
-            latent_cnn_list.append(cnn(obs_2d[i]))
+        latent_est_list = []
+        for i, est in enumerate(self.ests):  # We assume obs_2d list matches the order of obs_groups_2d
+            latent_est_list.append(est(self.obs_normalizer(obs_his[i])))
+        latent_est = torch.cat(latent_est_list, dim=-1)
+        latent_1d = torch.cat((latent_est, latent_1d), dim=-1)
 
-        latent_cnn = torch.cat(latent_cnn_list, dim=-1)
-        latent = torch.cat([latent_1d, latent_cnn], dim=-1)
+        latent_cnn_list = []
+        for i, cnn in enumerate(self.cnns):  # We assume obs_2d list matches the order of obs_groups_2d
+            latent_cnn_list.append(cnn(obs_2d[i][:, -1:, ...]))
+        latent_cnn = torch.cat(latent_cnn_list, dim=-1).flatten(2).permute(0, 2, 1)
+
+        latent_dil_cnn_list = []
+        for i, dil_cnn in enumerate(self.dil_cnns):  # We assume obs_2d list matches the order of obs_groups_2d
+            latent_dil_cnn_list.append(dil_cnn(obs_2d[i][:, -1:, ...]))
+        latent_dil_cnn = torch.cat(latent_dil_cnn_list, dim=-1).flatten(2).permute(0, 2, 1)
+
+        latent_pos_list = []
+        for i, position in enumerate(self.positions):  # We assume obs_2d list matches the order of obs_groups_2d
+            latent_pos_list.append(position(obs_2d[i].flatten(2).permute(0, 2, 1)))
+        latent_pos = torch.cat(latent_pos_list, dim=-1)
+        latent_mapping = torch.cat([latent_cnn, latent_dil_cnn, latent_pos], dim=-1)   # (N, 234, 64)
+
+        mapping_pool = self.pool(latent_mapping)    # (N, 234, 1)
+        mapping_pool = torch.sum(mapping_pool * latent_mapping, dim=1, keepdim=True)   # (N, 1, 64)
+        mapping_pool_enc = self.pool_linear(torch.concat([latent_1d.unsqueeze(1), mapping_pool], dim=-1))   # (N, 1, 64)
+        # gated_mha
+        query = self.q_norm(mapping_pool_enc)
+        key = self.k_norm(latent_mapping)
+        latent_mha, _ = self.mha(query, key, latent_mapping, need_weights=False)    # (N, 1, 64)
+        latent_mha = self.o_norm(latent_mha).flatten(1) # (N, 64)
+        latent = torch.cat([latent_1d, latent_mha], dim=-1)
 
         out = self.mlp(latent)
         return self.deterministic_output(out)
@@ -367,12 +440,17 @@ class _OnnxCNNModel(nn.Module):
             h, w = self.obs_dims_2d[i]
             c = self.obs_channels_2d[i]
             dummy_2d.append(torch.zeros(1, c, h, w))
-        return (dummy_1d, *dummy_2d)
+        dummy_his = []
+        for i in range(len(self.obs_groups_his)):
+            c = self.obs_dims_his[i]
+            h = self.obs_channels_his[i]
+            dummy_his.append(torch.zeros(1, h, c))
+        return (dummy_1d, *dummy_2d, *dummy_his)
 
     @property
     def input_names(self) -> list[str]:
         """Return ONNX input tensor names."""
-        return ["obs", *self.obs_groups_2d]
+        return ["obs", *self.obs_groups_2d, *self.obs_groups_his]
 
     @property
     def output_names(self) -> list[str]:

@@ -34,12 +34,17 @@ def elevation_map(
 ) -> torch.Tensor:
     # extract the used quantities (to enable type-hinting)
     sensor: RayCaster = env.scene.sensors[sensor_cfg.name]
+    vfloor_z = env.vfloor_z.unsqueeze(1)  # (N, 1)
 
-    relative_pos_w = sensor.data.ray_hits_w.torch - sensor.data.pos_w.torch.unsqueeze(1)  # (N, B, 3)
-    sensor_quat_expanded = yaw_quat(sensor.data.quat_w.torch).unsqueeze(1).expand(-1, relative_pos_w.shape[1], -1)
-    relative_pos_s = quat_apply_inverse(sensor_quat_expanded, relative_pos_w)
+    pos_z = sensor.data.pos_w.torch[:, 2:3]  # (N, 1)
+    ray_hits_z = sensor.data.ray_hits_w.torch[..., 2]   # (N, B)
+    miss = ~torch.isfinite(ray_hits_z)  # (N, B)
+    ray_hits_z = torch.where(miss, vfloor_z, ray_hits_z)
 
-    relative_pos_s = torch.nan_to_num(relative_pos_s, nan=0.0, posinf=3.0, neginf=-3.0)
-    # Z-axis height: height = hit_point_z - sensor_height + offset + noise
-    relative_pos_s[..., 2] += offset + (torch.rand_like(relative_pos_s[..., 2]) - 0.5) * 2 * z_noise
-    return relative_pos_s.reshape(relative_pos_w.shape[0], size[0], size[1], 3).permute(0, 3, 1, 2).contiguous()
+    # Z-axis height: height = sensor_height - hit_point_z - offset + noise
+    height_scan = pos_z - ray_hits_z - offset
+    height_scan += (torch.rand_like(height_scan) - 0.5) * 2 * z_noise  # (N, B)
+    height_scan = height_scan.reshape(height_scan.shape[0], size[0], size[1]).unsqueeze(-1)
+    elevation_map = sensor.ray_starts.torch.reshape(height_scan.shape[0], size[0], size[1], -1)[..., :2]
+
+    return torch.cat([elevation_map, height_scan], dim=-1).permute(0, 3, 1, 2).contiguous()

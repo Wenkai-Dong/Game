@@ -166,7 +166,7 @@ class CommandsCfg:
         heading_control_stiffness=0.5,
         debug_vis=True,
         ranges=mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-0.5, 1.5), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-1.0, 1.0), heading=(-math.pi, math.pi)
+            lin_vel_x=(-0.5, 1.5), lin_vel_y=(-0.5, 0.5), ang_vel_z=(-1.0, 1.0), heading=(-math.pi, math.pi)
         ),
         vel_yaw_success_threshold=0.8,
         marker_pos_offset=(0.0, 0.0, 0.75),
@@ -212,7 +212,7 @@ class ObservationsCfg:
         height_scan = ObsTerm(
             func=mdp.elevation_map,
             params={"sensor_cfg": SceneEntityCfg("actor_height_scanner"), "size": (13, 18), "offset": 0.825, "z_noise": 0.05},
-            clip=(-3.0, 3.0),
+            clip=(-2.0, 2.0),
         )
 
         def __post_init__(self):
@@ -259,7 +259,7 @@ class ObservationsCfg:
         height_scan = ObsTerm(
             func=mdp.elevation_map,
             params={"sensor_cfg": SceneEntityCfg("critic_height_scanner"), "size": (13, 18), "offset": 0.825, "z_noise": 0.0},
-            clip=(-3.0, 3.0),
+            clip=(-2.0, 2.0),
         )
 
         def __post_init__(self):
@@ -346,6 +346,8 @@ class EventsCfg:
         },
     )
 
+    virtual_floor = EventTerm(func=mdp.randomize_virtual_floor, mode="reset", params={"vfloor_range": (0.4, 1.0),},)
+
 
 @configclass
 class RewardsCfg:
@@ -365,7 +367,7 @@ class RewardsCfg:
         func=mdp.joint_acc_l2,
         weight=-1.0e-6,
         params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_shoulder_roll_joint", ".*_shoulder_yaw_joint"])
+            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_shoulder_roll_joint", ".*_shoulder_yaw_joint", ".*_wrist_.*_joint"])
         },
     )
     joint_torque_penalty = RewTerm(
@@ -528,9 +530,19 @@ class VelocityEnvCfg(ManagerBasedRLEnvCfg):
         self.scene.terrain.max_init_terrain_level = None
         # reduce the number of terrains to save memory
         if self.scene.terrain.terrain_generator is not None:
-            self.scene.terrain.terrain_generator.num_rows = 5
-            self.scene.terrain.terrain_generator.num_cols = 5
-            self.scene.terrain.terrain_generator.curriculum = False
+            self.scene.terrain.terrain_generator.num_rows = 1
+            self.scene.terrain.terrain_generator.num_cols = 1
+            # self.scene.terrain.terrain_generator.num_rows = 20
+            # self.scene.terrain.terrain_generator.num_cols = 5
+            # self.scene.terrain.terrain_generator.curriculum = False
+            self.scene.terrain.terrain_generator.difficulty_range = (1.0, 1.0)
+        # command
+        self.commands.base_velocity.ranges.lin_vel_x = (1.5, 1.5)
+        self.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
+        self.commands.base_velocity.ranges.heading = (0, 0)
         # remove random pushing events
         # self.events.base_external_force_torque = None
         # self.events.push_robot = None
+        self.events.reset_base.params["pose_range"]["yaw"] = (-0.0, 0.0)
+        # Recoder Settings
+        self.terminations.success = DoneTerm(func=mdp.subterrain_out_of_bounds, params={"distance_buffer": 0.0})

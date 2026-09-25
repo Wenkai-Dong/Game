@@ -37,9 +37,18 @@ def sub_terrain_levels_vel(
     # update terrain levels
     terrain.update_env_origins(env_ids, move_up, move_down)
     # return the mean terrain levels of sub-terrain
-    sub_terrains = list(terrain.cfg.terrain_generator.sub_terrains.keys())
+    gen_cfg = terrain.cfg.terrain_generator
+    if not hasattr(env, "_col_to_sub"):
+        props = torch.tensor([c.proportion for c in gen_cfg.sub_terrains.values()], dtype=torch.float64)
+        cum = torch.cumsum(props / props.sum(), dim=0)
+        cols = torch.arange(gen_cfg.num_cols, dtype=torch.float64) / gen_cfg.num_cols + 0.001
+        env._col_to_sub = torch.searchsorted(cum, cols, right=True).to(terrain.terrain_types.device)
+    sub_type = env._col_to_sub[terrain.terrain_types]
+
     levels = {}
-    for i in range(len(sub_terrains)):
-        levels[sub_terrains[i]] = torch.mean(terrain.terrain_levels[torch.where(terrain.terrain_types == i)[0]].float())
-    levels["all"] = torch.mean(terrain.terrain_levels.float())
+    for i, name in enumerate(gen_cfg.sub_terrains.keys()):
+        mask = sub_type == i
+        if mask.any():
+            levels[name] = terrain.terrain_levels[mask].float().mean()
+    levels["all"] = terrain.terrain_levels.float().mean()
     return levels

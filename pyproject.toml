@@ -17,6 +17,7 @@ authors = [{ name = "Isaac Lab Project Developers" }]
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "isaaclab-dev[rsl-rl]",
+    "wandb>=0.26.1",
 ]
 
 [project.entry-points."isaaclab.tasks"]
