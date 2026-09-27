@@ -13,6 +13,7 @@ import numpy as np
 import scipy.interpolate as interpolate
 
 from isaaclab.terrains.height_field.utils import height_field_to_mesh
+from isaaclab.terrains.height_field.hf_terrains import _terrain_origin
 
 if TYPE_CHECKING:
     from . import hf_terrains_cfg
@@ -56,7 +57,8 @@ def random_uniform_difficulty_terrain(difficulty: float, cfg: hf_terrains_cfg.Hf
     y_upsampled = np.linspace(0, cfg.size[1] * cfg.horizontal_scale, length_pixels)
     z_upsampled = func(x_upsampled, y_upsampled)
     # round off the interpolated heights to the nearest vertical step
-    return np.rint(z_upsampled * difficulty).astype(np.int16)
+    height_field = np.rint(z_upsampled * difficulty).astype(np.int16)
+    return height_field, _terrain_origin(height_field, cfg)
 
 
 

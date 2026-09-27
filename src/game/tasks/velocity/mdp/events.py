@@ -42,7 +42,9 @@ class randomize_virtual_floor(ManagerTermBase):
     ):
         # resolve environment ids
         if env_ids is None:
-            env_ids = torch.arange(env.scene.num_envs, device=env.device, dtype=torch.int32)
+            env_ids = slice(None)
+        if isinstance(env_ids, slice):
+            env_ids = torch.arange(env.scene.num_envs, device=env.device)[env_ids]
         else:
             env_ids = env_ids.to(env.device)
 

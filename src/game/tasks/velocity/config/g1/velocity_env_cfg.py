@@ -531,8 +531,6 @@ class VelocityEnvCfg(ManagerBasedRLEnvCfg):
         # reduce the number of terrains to save memory
         if self.scene.terrain.terrain_generator is not None:
             self.scene.terrain.terrain_generator.num_rows = 1
-            self.scene.terrain.terrain_generator.num_cols = 1
-            # self.scene.terrain.terrain_generator.num_rows = 20
             # self.scene.terrain.terrain_generator.num_cols = 5
             # self.scene.terrain.terrain_generator.curriculum = False
             self.scene.terrain.terrain_generator.difficulty_range = (1.0, 1.0)

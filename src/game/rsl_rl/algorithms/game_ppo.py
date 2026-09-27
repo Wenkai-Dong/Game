@@ -101,6 +101,7 @@ class GamePPO(PPO):
             self.est_optimizer.step()
 
             mean_est_loss += est_loss.item()
+        self.est_optimizer.zero_grad(set_to_none=True)
         # Divide the losses by the number of updates
         num_updates = self.num_learning_epochs * self.num_mini_batches
         mean_est_loss /= num_updates
