@@ -27,7 +27,7 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
         ),
         "pyramid_stairs": terrain_gen.MeshPyramidStairsTerrainCfg(
             proportion=0.1,
-            step_height_range=(0.05, 0.3),
+            step_height_range=(0.05, 0.25),
             step_width=0.3,
             platform_width=2.0,
             border_width=1.0,
@@ -36,7 +36,7 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
         ),
         "pyramid_stairs_inv": terrain_gen.MeshInvertedPyramidStairsTerrainCfg(
             proportion=0.1,
-            step_height_range=(0.05, 0.3),
+            step_height_range=(0.05, 0.25),
             step_width=0.3,
             platform_width=2.0,
             border_width=1.0,
@@ -58,7 +58,7 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
         ),
         "pits": terrain_gen.MeshPitTerrainCfg(
             proportion=0.1,
-            pit_depth_range=(0.1,0.6),
+            pit_depth_range=(0.1,0.5),
             double_pit=True,
             platform_width=2.0,
         ),
@@ -88,7 +88,7 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
         "stepping_stones_narrow": game_terrain_gen.MeshPalletsNarrowTerrainCfg(
             proportion=0.3,
             num_bars=5,
-            bar_width_range=(0.17, 0.8),
+            bar_width_range=(0.16, 0.8),
             stone_length_range=(0.14, 0.8),
             stone_distance_range=(0.05, 0.28),
             stone_height_range=(0.0, 0.1),

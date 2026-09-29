@@ -457,7 +457,7 @@ class TerminationsCfg:
         func=mdp.root_height_below_minimum_terrain,
         params={"minimum_height": 0.2, "sensor_cfg": SceneEntityCfg("base_height")}
     )
-    base_height = DoneTerm(func=mdp.root_height_below_minimum, params={"minimum_height": -3.0})
+    base_height = DoneTerm(func=mdp.root_height_below_minimum, params={"minimum_height": -2.5})
 
 
 @configclass
