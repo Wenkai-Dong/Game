@@ -22,6 +22,7 @@ class PPORunnerCfg(RslRlOnPolicyRunnerCfg):
     save_interval = 200
     experiment_name = "Game/game"
     obs_groups = {"actor": ["actor", "actor_map", "actor_history"], "critic": ["critic", "critic_map"]}
+    # torch_compile_mode: Literal["default", "max-autotune-no-cudagraphs"] | None = None
     # logger = "wandb"
     # wandb_project = "Game"
     actor = RslRlGameModelCfg(
