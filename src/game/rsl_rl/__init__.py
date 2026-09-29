@@ -4,9 +4,10 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 """Main module for the rsl_rl package."""
-from .rl_cfg import RslRlGameModelCfg, RslRlGamePpoAlgorithmCfg
+from .rl_cfg import RslRlGameModelCfg, RslRlGamePpoAlgorithmCfg, RslRlAME1ModelCfg
 
 __all__ = [
     "RslRlGameModelCfg",
+    "RslRlAME1ModelCfg",
     "RslRlGamePpoAlgorithmCfg",
 ]

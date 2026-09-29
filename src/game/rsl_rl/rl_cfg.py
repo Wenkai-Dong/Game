@@ -58,6 +58,31 @@ class RslRlGameModelCfg(RslRlCNNModelCfg):
 
     mha_cfg: MHACfg = MISSING
 
+@configclass
+class RslRlAME1ModelCfg(RslRlCNNModelCfg):
+
+    class_name: str = "game.rsl_rl.models.ame1_model:AME1Model"
+
+    init_weights: float | tuple[float] = 2 ** 0.5,
+
+    est_cfg: RslRlGameModelCfg.MLPCfg = MISSING
+
+    @configclass
+    class MHACfg:
+        num_heads: int = MISSING
+
+        dropout: int | tuple[int] | list[int] = MISSING
+
+        bias: bool = MISSING
+
+        kdim: int | None = None
+
+        vdim: int | None = None
+
+        batch_first: bool = MISSING
+
+    mha_cfg: MHACfg = MISSING
+
 
 ############################
 # Algorithm configurations #
