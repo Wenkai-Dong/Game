@@ -89,3 +89,18 @@ class MeshPalletsTerrainCfg(SubTerrainBaseCfg):
 
     border_width: float = 1.0
     """The width of the border around the terrain. Defaults to 1.0."""
+
+@configclass
+class MeshStarWoGroundTerrainCfg(SubTerrainBaseCfg):
+    """Configuration for a terrain with a star pattern."""
+
+    function: str = "{DIR}.mesh_terrains:star_terrain_wo_ground"
+
+    num_bars: int = MISSING
+    """The number of bars per-side the star. Must be greater than 2."""
+
+    bar_width_range: tuple[float, float] = MISSING
+    """The minimum and maximum width of the bars in the star (in m)."""
+
+    platform_width: tuple[float, float] | float = 1.0
+    """The width of the cylindrical platform at the center of the terrain. Defaults to 1.0."""

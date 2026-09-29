@@ -14,7 +14,7 @@ import numpy as np
 import scipy.spatial.transform as tf
 import trimesh
 
-from isaaclab.terrains.trimesh.utils import make_border, make_box
+from isaaclab.terrains.trimesh.utils import make_border, make_box, make_plane
 from isaaclab.terrains.utils import *  # noqa: F401, F403
 
 if TYPE_CHECKING:
@@ -229,5 +229,59 @@ def pallets_terrain(
 
     # specify the origin of the terrain
     origin = np.array([terrain_center[0], terrain_center[1], 0.0])
+
+    return meshes_list, origin
+
+def star_terrain_wo_ground(
+    difficulty: float, cfg: mesh_terrains_cfg.MeshStarTerrainCfg
+) -> tuple[list[trimesh.Trimesh], np.ndarray]:
+    if cfg.num_bars < 2:
+        raise ValueError(f"The number of bars in the star must be greater than 2. Received: {cfg.num_bars}")
+
+    # resolve the terrain configuration
+    bar_width = cfg.bar_width_range[1] - difficulty * (cfg.bar_width_range[1] - cfg.bar_width_range[0])
+    if isinstance(cfg.platform_width, tuple):
+        platform_width = cfg.platform_width[0] + difficulty * (cfg.platform_width[1] - cfg.platform_width[0])
+    else:
+        platform_width = cfg.platform_width
+
+    # initialize list of meshes
+    meshes_list = list()
+    # constants for terrain generation
+    ob_height = 1.0
+    # Generate a platform in the middle
+    platform_center = (0.5 * cfg.size[0], 0.5 * cfg.size[1], -ob_height / 2)
+    platform_transform = trimesh.transformations.translation_matrix(platform_center)
+    platform = trimesh.creation.cylinder(
+        platform_width * 0.5, ob_height, sections=2 * cfg.num_bars, transform=platform_transform
+    )
+    meshes_list.append(platform)
+    # Generate bars to connect the platform to the terrain
+    transform = np.eye(4)
+    transform[:3, -1] = np.asarray(platform_center)
+    yaw = 0.0
+    for _ in range(cfg.num_bars):
+        # compute the length of the bar based on the yaw
+        # length changes since the bar is connected to a square border
+        bar_length = cfg.size[0]
+        if yaw < 0.25 * np.pi:
+            bar_length /= math.cos(yaw)
+        elif yaw < 0.75 * np.pi:
+            bar_length /= math.sin(yaw)
+        else:
+            bar_length /= math.cos(np.pi - yaw)
+        # compute the transform of the bar
+        transform[0:3, 0:3] = tf.Rotation.from_euler("z", yaw).as_matrix()
+        # add the bar to the mesh
+        dim = [bar_length - bar_width, bar_width, ob_height]
+        bar = trimesh.creation.box(dim, transform)
+        meshes_list.append(bar)
+        # increment the yaw
+        yaw += np.pi / cfg.num_bars
+    # Generate the exterior border
+    inner_size = (cfg.size[0] - 2 * bar_width, cfg.size[1] - 2 * bar_width)
+    meshes_list += make_border(cfg.size, inner_size, ob_height, platform_center)
+    # specify the origin of the terrain
+    origin = np.asarray([0.5 * cfg.size[0], 0.5 * cfg.size[1], 0.0])
 
     return meshes_list, origin

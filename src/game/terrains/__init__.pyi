@@ -8,9 +8,15 @@ __all__ = [
     "MeshSteppingStonesTerrainCfg",
     "MeshPalletsNarrowTerrainCfg",
     "MeshPalletsTerrainCfg",
+    "MeshStarWoGroundTerrainCfg",
 ]
 
 from .height_field import (
     HfRandomUniformDifficultyTerrainCfg,
 )
-from .trimesh import MeshPalletsNarrowTerrainCfg, MeshPalletsTerrainCfg, MeshSteppingStonesTerrainCfg
+from .trimesh import (
+    MeshPalletsNarrowTerrainCfg,
+    MeshPalletsTerrainCfg,
+    MeshSteppingStonesTerrainCfg,
+    MeshStarWoGroundTerrainCfg
+)

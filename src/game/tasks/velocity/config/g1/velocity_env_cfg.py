@@ -111,7 +111,7 @@ class MySceneCfg(InteractiveSceneCfg):
     # documented on the config and ignored by the backends that do not use them.
     actor_height_scanner = RayCasterCfg(
         prim_path="{ENV_REGEX_NS}/Robot/torso_link",
-        offset=RayCasterCfg.OffsetCfg(pos=(0.32, 0.0, 20.0)),
+        offset=RayCasterCfg.OffsetCfg(pos=(0.6, 0.0, 20.0)),
         ray_alignment="yaw",
         pattern_cfg=patterns.GridPatternCfg(resolution=0.08, size=[1.36, 0.96]),
         debug_vis=False,
@@ -121,7 +121,7 @@ class MySceneCfg(InteractiveSceneCfg):
     )
     critic_height_scanner = RayCasterCfg(
         prim_path="{ENV_REGEX_NS}/Robot/torso_link",
-        offset=RayCasterCfg.OffsetCfg(pos=(0.32, 0.0, 20.0)),
+        offset=RayCasterCfg.OffsetCfg(pos=(0.6, 0.0, 20.0)),
         ray_alignment="yaw",
         pattern_cfg=patterns.GridPatternCfg(resolution=0.08, size=[1.36, 0.96]),
         debug_vis=False,
@@ -164,9 +164,9 @@ class CommandsCfg:
         rel_heading_envs=1.0,
         heading_command=True,
         heading_control_stiffness=0.5,
-        debug_vis=True,
+        debug_vis=False,
         ranges=mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-0.5, 1.5), lin_vel_y=(-0.5, 0.5), ang_vel_z=(-1.0, 1.0), heading=(-math.pi, math.pi)
+            lin_vel_x=(-0.0, 1.5), lin_vel_y=(-0.5, 0.5), ang_vel_z=(-1.0, 1.0), heading=(-math.pi, math.pi)
         ),
         vel_yaw_success_threshold=0.8,
         marker_pos_offset=(0.0, 0.0, 0.75),
@@ -346,7 +346,7 @@ class EventsCfg:
         },
     )
 
-    virtual_floor = EventTerm(func=mdp.randomize_virtual_floor, mode="reset", params={"vfloor_range": (0.4, 1.0),},)
+    virtual_floor = EventTerm(func=mdp.randomize_virtual_floor, mode="reset", params={"vfloor_range": (-0.4, -1.0),},)
 
 
 @configclass
