@@ -13,6 +13,7 @@ import sys
 
 from isaaclab.managers.recorder_manager import RecorderTerm
 from isaaclab.utils.datasets import EpisodeData
+from isaaclab_rl.entrypoints.common import _physics_backend_name
 from isaaclab_rl.utils.wandb import _WANDB_URI_PATTERN, _WANDB_URL_PATTERN
 
 
@@ -93,10 +94,11 @@ class CloseSaveWandBRecorder(RecorderTerm):
 
     def __init__(self, cfg, env):
         super().__init__(cfg, env)
+        sim_name = _physics_backend_name(env.cfg.sim.physics)
         vx = env.cfg.commands.base_velocity.ranges.lin_vel_x[0]
         diff = env.cfg.scene.terrain.terrain_generator.difficulty_range[0]
 
-        env.cfg.recorders.dataset_filename = f"vx{vx}_diff{diff}"
+        env.cfg.recorders.dataset_filename = f"{sim_name}_vx{vx}_diff{diff}"
         self._file_path = os.path.abspath(
             os.path.join(env.cfg.recorders.dataset_export_dir_path, env.cfg.recorders.dataset_filename)
         )
