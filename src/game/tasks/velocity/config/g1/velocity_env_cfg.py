@@ -13,6 +13,7 @@ from isaaclab.managers import CurriculumTermCfg as CurrTerm
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
+from isaaclab.managers import RecorderManagerBaseCfg
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
@@ -43,6 +44,17 @@ from game.tasks.velocity import mdp
 ##
 from game.assets import UNITREE_G1_29DOF_DelayPD_Physx_CFG  # isort: skip
 from game.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
+
+
+##
+# Recorder presets
+##
+
+
+@configclass
+class RecordersCfg(PresetCfg):
+    default = RecorderManagerBaseCfg()
+    recorder = mdp.VelocityRecorderManagerCfg()
 
 
 ##
@@ -489,6 +501,8 @@ class VelocityEnvCfg(ManagerBasedRLEnvCfg):
     terminations: TerminationsCfg = TerminationsCfg()
     events: EventsCfg = EventsCfg()
     curriculum: CurriculumCfg = CurriculumCfg()
+    # Recorders Settings
+    recorders: RecordersCfg = RecordersCfg()
 
     def __post_init__(self):
         """Post initialization."""
@@ -531,16 +545,16 @@ class VelocityEnvCfg(ManagerBasedRLEnvCfg):
         # reduce the number of terrains to save memory
         if self.scene.terrain.terrain_generator is not None:
             self.scene.terrain.terrain_generator.num_rows = 1
-            # self.scene.terrain.terrain_generator.num_cols = 5
-            # self.scene.terrain.terrain_generator.curriculum = False
-            self.scene.terrain.terrain_generator.difficulty_range = (1.0, 1.0)
+            self.scene.terrain.terrain_generator.difficulty_range = (0.95, 0.95)
         # command
         self.commands.base_velocity.ranges.lin_vel_x = (1.5, 1.5)
         self.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
         self.commands.base_velocity.ranges.heading = (0, 0)
+        self.commands.base_velocity.rel_standing_envs = 0.0
+        self.commands.base_velocity.resampling_time_range = (30.0, 30.0)
         # remove random pushing events
         # self.events.base_external_force_torque = None
         # self.events.push_robot = None
         self.events.reset_base.params["pose_range"]["yaw"] = (-0.0, 0.0)
-        # Recoder Settings
+        # Terminations Settings
         self.terminations.success = DoneTerm(func=mdp.subterrain_out_of_bounds, params={"distance_buffer": 0.0})
