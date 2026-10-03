@@ -18,7 +18,14 @@ from rsl_rl.modules import CNN, HiddenState, MLP
 from game.rsl_rl.modules import GatedMHA
 
 
-class AME1Model(MLPModel):
+class AME2Model(MLPModel):
+    """CNN-based neural model.
+
+    This model uses one or more convolutional neural network (CNN) encoders to process one or more 2D observation groups
+    before passing the resulting latent to an MLP. Any 1D observation groups are directly concatenated with the CNN
+    latent and passed to the MLP. 1D observations can be normalized before being passed to the MLP. The output of the
+    model can be either deterministic or stochastic, in which case a distribution module is used to sample the outputs.
+    """
 
     def __init__(
         self,
@@ -32,6 +39,8 @@ class AME1Model(MLPModel):
         distribution_cfg: dict | None = None,
         cnn_cfg: dict[str, dict] | dict[str, Any] | None = None,
         cnns: nn.ModuleDict | dict[str, nn.Module] | None = None,
+        dil_cnn_cfg: dict[str, dict] | dict[str, Any] | None = None,
+        pos_cfg: dict[str, dict] | dict[str, Any] | None = None,
         est_cfg: dict[str, dict] | dict[str, Any] | None = None,
         mha_cfg: dict[str, dict] | dict[str, Any] | None = None,
         init_weights: float | tuple[float] = 2**0.5,
@@ -84,12 +93,28 @@ class AME1Model(MLPModel):
                     **cnn_cfg[obs_group],
                 )
                 cnns[obs_group].init_weights()
+            # Check configuration
+            if pos_cfg is None:
+                raise ValueError("Positions configurations must be provided if CNNs are not shared.")
+            # Create a cnn config for each 2D observation group in case only one is provided
+            if not all(isinstance(v, dict) for v in pos_cfg.values()):
+                pos_cfg = {group: pos_cfg for group in self.obs_groups_2d}
+            # Check that the number of configs matches the number of observation groups
+            if len(pos_cfg) != len(self.obs_groups_2d):
+                raise ValueError("The number of Positions configurations must match the number of 2D observation groups.")
+            # Create Dilation CNNs for each 2D observation
+            positions = {}
+            for idx, obs_group in enumerate(self.obs_groups_2d):
+                pos_init = pos_cfg[obs_group].pop("init_weights", None)
+                positions[obs_group] = MLP(input_dim=self.obs_channels_2d[idx], **pos_cfg[obs_group])
+                positions[obs_group].init_weights(pos_init)
 
         # Compute latent dimension of the CNNs
         self.cnn_latent_channels = 0
         for cnn in cnns.values():
             self.cnn_latent_channels += int(cnn.output_channels)  # type: ignore
-            self.cnn_latent_channels += 3  # type: ignore
+        for position in positions.values():
+            self.cnn_latent_channels += int(position[-1].out_features)  # type: ignore
 
         # Initialize the parent MLP model
         super().__init__(
@@ -109,6 +134,11 @@ class AME1Model(MLPModel):
             self.cnns = cnns
         else:
             self.cnns = nn.ModuleDict(cnns)
+        # Register Position encoders
+        if isinstance(positions, nn.ModuleDict):
+            self.positions = positions
+        else:
+            self.positions = nn.ModuleDict(positions)
 
         # Register Estimator encoders
         if "actor" in self.obs_set:
@@ -117,14 +147,21 @@ class AME1Model(MLPModel):
             else:
                 self.ests = nn.ModuleDict(ests)
 
-        # Register linear
+        # Register Pointwise Local MLP encoders
+        self.pointwise_local_mlp = MLP(self.cnn_latent_channels, 96, [128,], activation)
+        # Register Pool encoders
+        self.pool = nn.Sequential(
+            MLP(96, 64,[128,], activation),
+        )
         if "actor" in self.obs_set:
-            self.linear = nn.Linear(obs_dim_1d + 3, 64)
+            proprioception_encoder_input_dim = obs_dim_1d + 3
         else:
-            self.linear = nn.Linear(obs_dim_1d, 64)
+            proprioception_encoder_input_dim = obs_dim_1d
+        self.proprioception_encoder = MLP(proprioception_encoder_input_dim , 64, [128,], activation)
+        self.global_encoder = MLP(128 , 96, [128,], activation)
 
         # Register MHA encoders
-        self.mha = nn.MultiheadAttention(embed_dim=self.cnn_latent_channels, **mha_cfg)
+        self.mha = nn.MultiheadAttention(embed_dim=96, num_heads=32, bias=True, batch_first=True)
         self.need_weights = False
 
     def get_latent(
@@ -140,16 +177,22 @@ class AME1Model(MLPModel):
         # Process 2D observation groups with CNNs
         latent_cnn = torch.cat(
             [self.cnns[obs_group](obs[obs_group][:, -1:, ...]) for obs_group in self.obs_groups_2d], dim=-1
-        ) # (N, 61, 13, 18)
-        latent_cnn = latent_cnn.flatten(2).permute(0, 2, 1) # (N, 234, 61)
-        elevation_map = torch.cat([obs[obs_group] for obs_group in self.obs_groups_2d], dim=-1) # (N, 3, 13, 18)
-        elevation_map = elevation_map.flatten(2).permute(0, 2, 1) # (N, 234, 3)
-        latent_mapping = torch.cat([latent_cnn, elevation_map], dim=-1)   # (N, 234, 64)
-        # linear
-        linear = self.linear(latent_1d).unsqueeze(1)    # (N, 1, 64)
-        # gated_mha
-        latent_mha, self.attn_output_weights = self.mha(linear, latent_mapping, latent_mapping, need_weights=self.need_weights)    # (N, 1, 64)
-        return torch.cat([latent_1d, latent_mha.flatten(1)], dim=-1)
+        ) # (N, 48, 13, 18)
+        latent_cnn = latent_cnn.flatten(2).permute(0, 2, 1) # (N, 234, 48)
+        latent_pos = torch.cat(
+            [self.positions[obs_group](obs[obs_group].flatten(2).permute(0, 2, 1)) for obs_group in self.obs_groups_2d], dim=-1
+        ) # (N, 234, 16)
+        latent_mapping = torch.cat([latent_cnn, latent_pos], dim=-1)   # (N, 234, 64)
+        # pool
+        pointwise_local_feature = self.pointwise_local_mlp(latent_mapping)  # (N, 234, 96)
+        global_features = self.pool(pointwise_local_feature).amax(dim=1, keepdim=True)  # (N, 1, 64)
+        proprioception_embedding = self.proprioception_encoder(latent_1d.unsqueeze(1))  # (N, 1, 64)
+        mapping_pool_enc = self.global_encoder(torch.concat([proprioception_embedding, global_features], dim=-1))   # (N, 1, 96)
+        # mha
+        latent_mha, self.attn_output_weights = self.mha(
+            mapping_pool_enc, pointwise_local_feature, pointwise_local_feature, need_weights=self.need_weights
+        )    # (N, 96)
+        return torch.cat([proprioception_embedding.squeeze(1), latent_mha.flatten(1), global_features.squeeze(1)], dim=-1)
 
     def est_vel(
         self, obs: TensorDict, masks: torch.Tensor | None = None, hidden_state: HiddenState = None
@@ -211,10 +254,7 @@ class AME1Model(MLPModel):
 
     def _get_latent_dim(self) -> int:
         """Return the latent dimensionality consumed by the MLP head."""
-        if "actor" in self.obs_set:
-            return self.obs_dim + self.cnn_latent_channels + 3
-        else:
-            return self.obs_dim + self.cnn_latent_channels
+        return 224
 
 class _TorchGameModel(nn.Module):
     """Exportable CNN model for JIT."""

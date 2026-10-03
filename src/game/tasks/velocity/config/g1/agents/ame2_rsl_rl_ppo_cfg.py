@@ -20,19 +20,20 @@ class PPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
     max_iterations = 20000
     save_interval = 200
-    experiment_name = "Game/game"
+    experiment_name = "Game/ame2"
     obs_groups = {"actor": ["actor", "actor_map", "actor_history"], "critic": ["critic", "critic_map"]}
     # torch_compile_mode: Literal["default", "max-autotune-no-cudagraphs"] | None = None
     # logger = "wandb"
     # wandb_project = "Game"
     actor = RslRlGameModelCfg(
+        class_name="game.rsl_rl.models.ame2_model:AME2Model",
         hidden_dims=[512, 256, 128],
         activation="elu",
         obs_normalization=True,
         distribution_cfg=RslRlMLPModelCfg.GaussianDistributionCfg(init_std=1.0, std_type="log"),
         init_weights=(2**0.5, 0, 2**0.5, 0, 2**0.5, 0, 0.01),
         cnn_cfg=RslRlCNNModelCfg.CNNCfg(
-            output_channels=[16, 32],
+            output_channels=[16, 48],
             kernel_size=5,
             stride=1,
             dilation=1,
@@ -57,7 +58,7 @@ class PPORunnerCfg(RslRlOnPolicyRunnerCfg):
         ),
         pos_cfg=RslRlGameModelCfg.MLPCfg(
             output_dim=16,
-            hidden_dims=[64, 32],
+            hidden_dims=[64, 16],
             activation="elu",
             init_weights=(2 ** 0.5, 0, 2 ** 0.5, 0, 1.0),
         ),
