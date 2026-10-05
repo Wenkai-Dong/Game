@@ -147,21 +147,16 @@ class AME2Model(MLPModel):
             else:
                 self.ests = nn.ModuleDict(ests)
 
-        # Register Pointwise Local MLP encoders
-        self.pointwise_local_mlp = MLP(self.cnn_latent_channels, 96, [128,], activation)
         # Register Pool encoders
-        self.pool = nn.Sequential(
-            MLP(96, 64,[128,], activation),
-        )
+        self.pool = nn.Linear(64, 64)
         if "actor" in self.obs_set:
-            proprioception_encoder_input_dim = obs_dim_1d + 3
+            pool_linear_input_dim = self.cnn_latent_channels + obs_dim_1d + 3
         else:
-            proprioception_encoder_input_dim = obs_dim_1d
-        self.proprioception_encoder = MLP(proprioception_encoder_input_dim , 64, [128,], activation)
-        self.global_encoder = MLP(128 , 96, [128,], activation)
+            pool_linear_input_dim = self.cnn_latent_channels + obs_dim_1d
+        self.pool_linear = nn.Linear(pool_linear_input_dim , 64)
 
         # Register MHA encoders
-        self.mha = nn.MultiheadAttention(embed_dim=96, num_heads=32, bias=True, batch_first=True)
+        self.mha = nn.MultiheadAttention(embed_dim=64, num_heads=16, bias=True, batch_first=True)
         self.need_weights = False
 
     def get_latent(
@@ -184,15 +179,13 @@ class AME2Model(MLPModel):
         ) # (N, 234, 16)
         latent_mapping = torch.cat([latent_cnn, latent_pos], dim=-1)   # (N, 234, 64)
         # pool
-        pointwise_local_feature = self.pointwise_local_mlp(latent_mapping)  # (N, 234, 96)
-        global_features = self.pool(pointwise_local_feature).amax(dim=1, keepdim=True)  # (N, 1, 64)
-        proprioception_embedding = self.proprioception_encoder(latent_1d.unsqueeze(1))  # (N, 1, 64)
-        mapping_pool_enc = self.global_encoder(torch.concat([proprioception_embedding, global_features], dim=-1))   # (N, 1, 96)
+        mapping_pool = self.pool(latent_mapping).amax(dim=1, keepdim=True)  # (N, 1, 64)
+        mapping_pool_enc = self.pool_linear(torch.concat([latent_1d.unsqueeze(1), mapping_pool], dim=-1))   # (N, 1, 64)
         # mha
         latent_mha, self.attn_output_weights = self.mha(
-            mapping_pool_enc, pointwise_local_feature, pointwise_local_feature, need_weights=self.need_weights
-        )    # (N, 96)
-        return torch.cat([proprioception_embedding.squeeze(1), latent_mha.flatten(1), global_features.squeeze(1)], dim=-1)
+            mapping_pool_enc, latent_mapping, latent_mapping, need_weights=self.need_weights
+        )    # (N, 64)
+        return torch.cat([latent_1d, latent_mha.squeeze(1), mapping_pool.squeeze(1)], dim=-1)
 
     def est_vel(
         self, obs: TensorDict, masks: torch.Tensor | None = None, hidden_state: HiddenState = None
@@ -254,7 +247,7 @@ class AME2Model(MLPModel):
 
     def _get_latent_dim(self) -> int:
         """Return the latent dimensionality consumed by the MLP head."""
-        return 224
+        return 227
 
 class _TorchGameModel(nn.Module):
     """Exportable CNN model for JIT."""

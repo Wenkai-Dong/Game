@@ -18,7 +18,14 @@ from rsl_rl.modules import CNN, HiddenState, MLP
 from game.rsl_rl.modules import GatedMHA
 
 
-class AME1Model(MLPModel):
+class GLADModel(MLPModel):
+    """CNN-based neural model.
+
+    This model uses one or more convolutional neural network (CNN) encoders to process one or more 2D observation groups
+    before passing the resulting latent to an MLP. Any 1D observation groups are directly concatenated with the CNN
+    latent and passed to the MLP. 1D observations can be normalized before being passed to the MLP. The output of the
+    model can be either deterministic or stochastic, in which case a distribution module is used to sample the outputs.
+    """
 
     def __init__(
         self,
@@ -32,6 +39,8 @@ class AME1Model(MLPModel):
         distribution_cfg: dict | None = None,
         cnn_cfg: dict[str, dict] | dict[str, Any] | None = None,
         cnns: nn.ModuleDict | dict[str, nn.Module] | None = None,
+        dil_cnn_cfg: dict[str, dict] | dict[str, Any] | None = None,
+        pos_cfg: dict[str, dict] | dict[str, Any] | None = None,
         est_cfg: dict[str, dict] | dict[str, Any] | None = None,
         mha_cfg: dict[str, dict] | dict[str, Any] | None = None,
         init_weights: float | tuple[float] = 2**0.5,
@@ -80,7 +89,7 @@ class AME1Model(MLPModel):
             for idx, obs_group in enumerate(self.obs_groups_2d):
                 cnns[obs_group] = CNN(
                     input_dim=self.obs_dims_2d[idx],
-                    input_channels=self.obs_channels_2d[idx] - 2,
+                    input_channels=self.obs_channels_2d[idx],
                     **cnn_cfg[obs_group],
                 )
                 cnns[obs_group].init_weights()
@@ -89,7 +98,6 @@ class AME1Model(MLPModel):
         self.cnn_latent_channels = 0
         for cnn in cnns.values():
             self.cnn_latent_channels += int(cnn.output_channels)  # type: ignore
-            self.cnn_latent_channels += 3  # type: ignore
 
         # Initialize the parent MLP model
         super().__init__(
@@ -117,17 +125,20 @@ class AME1Model(MLPModel):
             else:
                 self.ests = nn.ModuleDict(ests)
 
-        # Register linear
+        # Register Pool encoders
+        self.weights_linear = nn.Sequential(
+            nn.Linear(self.cnn_latent_channels, 1),
+            nn.Softmax(dim=1),
+        )
         if "actor" in self.obs_set:
-            self.linear = nn.Linear(obs_dim_1d + 3, 64)
+            state_query_linear_input_dim = self.cnn_latent_channels + obs_dim_1d + 3
         else:
-            self.linear = nn.Linear(obs_dim_1d, 64)
+            state_query_linear_input_dim = self.cnn_latent_channels + obs_dim_1d
+        self.state_query_linear = nn.Linear(state_query_linear_input_dim , 64)
+        self.score_linear = MLP(128, 1, [64,], activation=activation)
 
         # Register MHA encoders
-        self.q_norm = nn.LayerNorm(self.cnn_latent_channels)
-        self.k_norm = nn.LayerNorm(self.cnn_latent_channels)
-        self.mha = nn.MultiheadAttention(embed_dim=self.cnn_latent_channels, **mha_cfg)
-        self.o_norm = nn.LayerNorm(self.cnn_latent_channels)
+        self.mha = nn.MultiheadAttention(embed_dim=64, num_heads=16, bias=True, batch_first=True)
         self.need_weights = False
 
     def get_latent(
@@ -141,21 +152,21 @@ class AME1Model(MLPModel):
             latent_est = self.est_vel(obs).detach()
             latent_1d = torch.cat((latent_est, latent_1d), dim=-1)
         # Process 2D observation groups with CNNs
-        latent_cnn = torch.cat(
-            [self.cnns[obs_group](obs[obs_group][:, -1:, ...]) for obs_group in self.obs_groups_2d], dim=-1
-        ) # (N, 61, 13, 18)
-        latent_cnn = latent_cnn.flatten(2).permute(0, 2, 1) # (N, 234, 61)
-        elevation_map = torch.cat([obs[obs_group] for obs_group in self.obs_groups_2d], dim=-1) # (N, 3, 13, 18)
-        elevation_map = elevation_map.flatten(2).permute(0, 2, 1) # (N, 234, 3)
-        latent_mapping = torch.cat([latent_cnn, elevation_map], dim=-1)   # (N, 234, 64)
-        # linear
-        linear = self.linear(latent_1d).unsqueeze(1)    # (N, 1, 64)
+        latent_cnn = torch.cat([self.cnns[obs_group](obs[obs_group]) for obs_group in self.obs_groups_2d], dim=-1) # (N, 64, 13, 18)
+        latent_cnn = latent_cnn.flatten(2).permute(0, 2, 1) # (N, 234, 64)
+        # pool
+        alpha = self.weights_linear(latent_cnn)    # (N, 234, 1)
+        c = torch.sum(alpha * latent_cnn, dim=1, keepdim=True)   # (N, 1, 64)
+        q = self.state_query_linear(torch.concat([latent_1d.unsqueeze(1), c], dim=-1))   # (N, 1, 64)
+        s = self.score_linear(torch.concat([q.expand(-1, 234, -1), latent_cnn], dim=-1)).squeeze(-1)    # (N, 234)
+        s_top, idx = torch.topk(s, k=32, dim=-1)    # (N，32), (N, 32)
+        k_top = torch.gather(latent_cnn, 1, idx.unsqueeze(-1).expand(-1, -1, latent_cnn.shape[-1])) # (N, 32, 64)
+        g = torch.sigmoid(s_top).unsqueeze(-1)
+        g_st = g - g.detach() + 1.0
+        k_top = k_top * g_st
         # gated_mha
-        query = self.q_norm(linear)
-        key = self.k_norm(latent_mapping)
-        latent_mha, self.attn_output_weights = self.mha(query, key, latent_mapping, need_weights=self.need_weights)
-        latent_mha = self.o_norm(latent_mha).flatten(1)# (N, 1, 64)
-        return torch.cat([latent_1d, latent_mha.flatten(1)], dim=-1)
+        latent_mha, self.attn_output_weights = self.mha(q, k_top, k_top, need_weights=self.need_weights)    # (N, 1, 64)
+        return torch.cat([latent_1d, latent_mha.squeeze(1), c.squeeze(1)], dim=-1)
 
     def est_vel(
         self, obs: TensorDict, masks: torch.Tensor | None = None, hidden_state: HiddenState = None
@@ -218,9 +229,9 @@ class AME1Model(MLPModel):
     def _get_latent_dim(self) -> int:
         """Return the latent dimensionality consumed by the MLP head."""
         if "actor" in self.obs_set:
-            return self.obs_dim + self.cnn_latent_channels + 3
+            return self.obs_dim + self.cnn_latent_channels + 3 + 64
         else:
-            return self.obs_dim + self.cnn_latent_channels
+            return self.obs_dim + self.cnn_latent_channels + 64
 
 class _TorchGameModel(nn.Module):
     """Exportable CNN model for JIT."""

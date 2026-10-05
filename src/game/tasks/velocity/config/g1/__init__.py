@@ -34,6 +34,7 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.game_rsl_rl_ppo_cfg:PPORunnerCfg",
         "rsl_rl_ame1_cfg_entry_point": f"{agents.__name__}.ame1_rsl_rl_ppo_cfg:PPORunnerCfg",
         "rsl_rl_ame2_cfg_entry_point": f"{agents.__name__}.ame2_rsl_rl_ppo_cfg:PPORunnerCfg",
+        "rsl_rl_glad_cfg_entry_point": f"{agents.__name__}.glad_rsl_rl_ppo_cfg:PPORunnerCfg",
         "rsl_rl_distillation_cfg_entry_point": f"{agents.__name__}.rsl_rl_distillation_cfg:DistillationRunnerCfg",
     },
 )

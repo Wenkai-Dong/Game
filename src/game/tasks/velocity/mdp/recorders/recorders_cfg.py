@@ -59,7 +59,7 @@ class PostResetEpisodeCountRecorderCfg(RecorderTermCfg):
 
     class_type: type["PostResetEpisodeCountRecorder"] | str = "{DIR}.recorders:PostResetEpisodeCountRecorder"
 
-    max_episode: int = 1
+    max_episode: int = 4
 
 
 @configclass

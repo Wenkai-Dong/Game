@@ -544,7 +544,7 @@ class VelocityEnvCfg(ManagerBasedRLEnvCfg):
         self.scene.terrain.max_init_terrain_level = None
         # reduce the number of terrains to save memory
         if self.scene.terrain.terrain_generator is not None:
-            self.scene.terrain.terrain_generator.num_rows = 1
+            self.scene.terrain.terrain_generator.num_rows = 20
             self.scene.terrain.terrain_generator.difficulty_range = (0.95, 0.95)
         # command
         self.commands.base_velocity.ranges.lin_vel_x = (1.5, 1.5)
@@ -558,3 +558,4 @@ class VelocityEnvCfg(ManagerBasedRLEnvCfg):
         self.events.reset_base.params["pose_range"]["yaw"] = (-0.0, 0.0)
         # Terminations Settings
         self.terminations.success = DoneTerm(func=mdp.subterrain_out_of_bounds, params={"distance_buffer": 0.0})
+        self.curriculum.terrain_levels = None
