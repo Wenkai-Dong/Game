@@ -135,7 +135,7 @@ class GLADModel(MLPModel):
         else:
             state_query_linear_input_dim = self.cnn_latent_channels + obs_dim_1d
         self.state_query_linear = nn.Linear(state_query_linear_input_dim , 64)
-        self.score_linear = MLP(128, 1, [64,], activation=activation)
+        self.score_linear = nn.Linear(128, 1)
 
         # Register MHA encoders
         self.mha = nn.MultiheadAttention(embed_dim=64, num_heads=16, bias=True, batch_first=True)
@@ -159,11 +159,13 @@ class GLADModel(MLPModel):
         c = torch.sum(alpha * latent_cnn, dim=1, keepdim=True)   # (N, 1, 64)
         q = self.state_query_linear(torch.concat([latent_1d.unsqueeze(1), c], dim=-1))   # (N, 1, 64)
         s = self.score_linear(torch.concat([q.expand(-1, 234, -1), latent_cnn], dim=-1)).squeeze(-1)    # (N, 234)
+        if self.training:
+            s = s - torch.empty_like(s).exponential_().log()
         s_top, idx = torch.topk(s, k=32, dim=-1)    # (N，32), (N, 32)
+        w = torch.gather(torch.softmax(s, dim=-1), 1, idx)
+        g_st = w - w.detach() + 1.0
         k_top = torch.gather(latent_cnn, 1, idx.unsqueeze(-1).expand(-1, -1, latent_cnn.shape[-1])) # (N, 32, 64)
-        g = torch.sigmoid(s_top).unsqueeze(-1)
-        g_st = g - g.detach() + 1.0
-        k_top = k_top * g_st
+        k_top = k_top * g_st.unsqueeze(-1)
         # gated_mha
         latent_mha, self.attn_output_weights = self.mha(q, k_top, k_top, need_weights=self.need_weights)    # (N, 1, 64)
         return torch.cat([latent_1d, latent_mha.squeeze(1), c.squeeze(1)], dim=-1)

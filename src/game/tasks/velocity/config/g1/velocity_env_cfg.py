@@ -544,8 +544,8 @@ class VelocityEnvCfg(ManagerBasedRLEnvCfg):
         self.scene.terrain.max_init_terrain_level = None
         # reduce the number of terrains to save memory
         if self.scene.terrain.terrain_generator is not None:
-            self.scene.terrain.terrain_generator.num_rows = 20
-            self.scene.terrain.terrain_generator.difficulty_range = (0.95, 0.95)
+            self.scene.terrain.terrain_generator.num_rows = 1
+            self.scene.terrain.terrain_generator.difficulty_range = (1.0, 1.0)
         # command
         self.commands.base_velocity.ranges.lin_vel_x = (1.5, 1.5)
         self.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
