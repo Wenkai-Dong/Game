@@ -159,8 +159,8 @@ class GLADModel(MLPModel):
         c = torch.sum(alpha * latent_cnn, dim=1, keepdim=True)   # (N, 1, 64)
         q = self.state_query_linear(torch.concat([latent_1d.unsqueeze(1), c], dim=-1))   # (N, 1, 64)
         s = self.score_linear(torch.concat([q.expand(-1, 234, -1), latent_cnn], dim=-1)).squeeze(-1)    # (N, 234)
-        if self.training:
-            s = s - torch.empty_like(s).exponential_().log()
+        # if self.training:
+        #     s = s - torch.empty_like(s).exponential_().log()
         s_top, idx = torch.topk(s, k=32, dim=-1)    # (N，32), (N, 32)
         w = torch.gather(torch.softmax(s, dim=-1), 1, idx)
         g_st = w - w.detach() + 1.0
