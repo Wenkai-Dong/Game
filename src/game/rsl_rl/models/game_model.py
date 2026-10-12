@@ -222,7 +222,7 @@ class GameModel(MLPModel):
         key = self.k_norm(latent_mapping)
         latent_mha, self.attn_output_weights = self.mha(query, key, latent_mapping, need_weights=self.need_weights)    # (N, 1, 64)
         latent_mha = self.o_norm(latent_mha).flatten(1) # (N, 64)
-        return torch.cat([latent_1d, latent_mha], dim=-1)
+        return torch.cat([latent_1d, latent_mha, mapping_pool.flatten(1)], dim=-1)
 
     def est_vel(
         self, obs: TensorDict, masks: torch.Tensor | None = None, hidden_state: HiddenState = None
