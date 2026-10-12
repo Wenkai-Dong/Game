@@ -102,14 +102,32 @@ class CloseSaveWandBRecorder(RecorderTerm):
         self._file_path = os.path.abspath(
             os.path.join(env.cfg.recorders.dataset_export_dir_path, env.cfg.recorders.dataset_filename)
         )
+        self._finalized = False
+        orig_close = env.close
+
+        def _close_and_upload():
+            self._finalize()
+            orig_close()
+
+        env.close = _close_and_upload
 
     def close(self, file_path):
-        file_path = self._file_path
-        run_path = wandb_run_path_from_checkpoint()
-        if  run_path is None:
-            print(f"[INFO] Evaluation dataset saved locally: {os.path.abspath(file_path)}")
+        self._finalize()
+
+    def _finalize(self):
+        if self._finalized:
             return
-        if not file_path.endswith(".hdf5"):
-            file_path += ".hdf5"
+        self._finalized = True
+        # 先关闭 HDF5，确保文件完整写盘后再上传
+        manager = getattr(self._env, "recorder_manager", None)
+        handler = getattr(manager, "_dataset_file_handler", None)
+        if handler is not None:
+            handler.close()
+
+        run_path = wandb_run_path_from_checkpoint()
+        if run_path is None:
+            print(f"[INFO] Evaluation dataset saved locally: {self._file_path}", flush=True)
+            return
         import wandb
-        wandb.Api().run(run_path).upload_file(file_path, root=os.path.dirname(file_path))
+        wandb.Api().run(run_path).upload_file(self._file_path, root=os.path.dirname(self._file_path))
+        print(f"[INFO] Uploaded {os.path.basename(self._file_path)} -> {run_path}", flush=True)
