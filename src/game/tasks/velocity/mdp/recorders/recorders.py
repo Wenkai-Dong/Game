@@ -102,6 +102,8 @@ class CloseSaveWandBRecorder(RecorderTerm):
         self._file_path = os.path.abspath(
             os.path.join(env.cfg.recorders.dataset_export_dir_path, env.cfg.recorders.dataset_filename)
         )
+        if not self._file_path.endswith(".hdf5"):
+            self._file_path += ".hdf5"
         self._finalized = False
         orig_close = env.close
 
