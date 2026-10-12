@@ -285,9 +285,9 @@ class GameModel(MLPModel):
     def _get_latent_dim(self) -> int:
         """Return the latent dimensionality consumed by the MLP head."""
         if "actor" in self.obs_set:
-            return self.obs_dim + self.cnn_latent_channels + 3
+            return self.obs_dim + self.cnn_latent_channels + 3 + 64
         else:
-            return self.obs_dim + self.cnn_latent_channels
+            return self.obs_dim + self.cnn_latent_channels + 64
 
 class _TorchGameModel(nn.Module):
     """Exportable CNN model for JIT."""
