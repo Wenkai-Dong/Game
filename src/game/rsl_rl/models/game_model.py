@@ -184,10 +184,7 @@ class GameModel(MLPModel):
         self.pool_linear = nn.Linear(pool_linear_input_dim , 64)
 
         # Register MHA encoders
-        self.q_norm = nn.LayerNorm(self.cnn_latent_channels)
-        self.k_norm = nn.LayerNorm(self.cnn_latent_channels)
         self.mha = GatedMHA(embed_dim=self.cnn_latent_channels, **mha_cfg)
-        self.o_norm = nn.LayerNorm(self.cnn_latent_channels)
         self.need_weights = False
 
     def get_latent(
@@ -217,12 +214,10 @@ class GameModel(MLPModel):
         mapping_pool = self.pool(latent_mapping)    # (N, 234, 1)
         mapping_pool = torch.sum(mapping_pool * latent_mapping, dim=1, keepdim=True)   # (N, 1, 64)
         mapping_pool_enc = self.pool_linear(torch.concat([latent_1d.unsqueeze(1), mapping_pool], dim=-1))   # (N, 1, 64)
-        # gated_mha
-        query = self.q_norm(mapping_pool_enc)
-        key = self.k_norm(latent_mapping)
-        latent_mha, self.attn_output_weights = self.mha(query, key, latent_mapping, need_weights=self.need_weights)    # (N, 1, 64)
-        latent_mha = self.o_norm(latent_mha).flatten(1) # (N, 64)
-        return torch.cat([latent_1d, latent_mha, mapping_pool.flatten(1)], dim=-1)
+        latent_mha, self.attn_output_weights = self.mha(
+            mapping_pool_enc, latent_mapping, latent_mapping, need_weights=self.need_weights
+        )    # (N, 1, 64)
+        return torch.cat([latent_1d, latent_mha.squeeze(1), mapping_pool.squeeze(1)], dim=-1)
 
     def est_vel(
         self, obs: TensorDict, masks: torch.Tensor | None = None, hidden_state: HiddenState = None
