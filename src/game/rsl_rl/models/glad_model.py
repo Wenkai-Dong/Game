@@ -157,13 +157,14 @@ class GLADModel(MLPModel):
         # pool
         alpha = self.weights_linear(latent_cnn)    # (N, 234, 1)
         c = torch.sum(alpha * latent_cnn, dim=1, keepdim=True)   # (N, 1, 64)
-        q = self.state_query_linear(torch.concat([latent_1d.unsqueeze(1), c], dim=-1))   # (N, 1, 64)
-        s = self.score_linear(torch.concat([q.expand(-1, 234, -1), latent_cnn], dim=-1)).squeeze(-1)    # (N, 234)
-        # if self.training:
-        #     s = s - torch.empty_like(s).exponential_().log()
-        s_top, idx = torch.topk(s, k=32, dim=-1)    # (N，32), (N, 32)
-        w = torch.gather(torch.softmax(s, dim=-1), 1, idx)
-        g_st = w - w.detach() + 1.0
+        with torch.autocast(device_type=latent_cnn.device.type, enabled=False):
+            q = self.state_query_linear(torch.concat([latent_1d.unsqueeze(1), c], dim=-1))   # (N, 1, 64)
+            s = self.score_linear(torch.concat([q.expand(-1, 234, -1), latent_cnn], dim=-1)).squeeze(-1)    # (N, 234)
+            # if self.training:
+            #     s = s - torch.empty_like(s).exponential_().log()
+            s_top, idx = torch.topk(s, k=32, dim=-1)    # (N，32), (N, 32)
+            w = torch.gather(torch.softmax(s, dim=-1), 1, idx)
+            g_st = w - w.detach() + 1.0
         k_top = torch.gather(latent_cnn, 1, idx.unsqueeze(-1).expand(-1, -1, latent_cnn.shape[-1])) # (N, 32, 64)
         k_top = k_top * g_st.unsqueeze(-1)
         # gated_mha
